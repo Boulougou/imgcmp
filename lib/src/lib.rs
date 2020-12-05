@@ -2,7 +2,6 @@ mod image;
 mod utils;
 
 use crate::image::Image;
-use crate::utils::scale_image;
 use anyhow::Context;
 
 pub struct Config {
@@ -16,18 +15,22 @@ impl Default for Config {
 }
 
 pub fn compare_images(left_image : &Image, right_image : &Image, config : Config) -> anyhow::Result<bool> {
-    let left_scaled = scale_image(left_image, config.dct_dimension, config.dct_dimension).
+    // Scale both images down to DCT size
+    let left_scaled = utils::scale_image(left_image, config.dct_dimension, config.dct_dimension).
         context("Failed to scale left image")?;
-    let right_scaled = scale_image(right_image, config.dct_dimension, config.dct_dimension).
+    let right_scaled = utils::scale_image(right_image, config.dct_dimension, config.dct_dimension).
         context("Failed to scale left image")?;
 
     // convert to grayscale
+    let left_scaled_grayscale = utils::into_grayscale(left_scaled);
+    let right_scaled_grayscale = utils::into_grayscale(right_scaled);
+
     // compute 32x32 DCT
     // take top left 8x8 from DCT
     // compute average and convert to 1bit 8x8
     // create hash
 
-    Ok(left_scaled == right_scaled)
+    Ok(left_scaled_grayscale == right_scaled_grayscale)
 }
 
 #[cfg(test)]
@@ -53,6 +56,16 @@ mod tests {
         let img2 = read_image("../assets/cat2.jpg").and_then(|x| to_image(x))?;
 
         assert_eq!(compare_images(&img1, &img2, Config::default())?, false);
+        Ok(())
+    }
+
+    #[test]
+    fn grayscale_image_is_same_with_original() -> anyhow::Result<()> {
+        let img = read_image("../assets/cat.jpg")?;
+        let grayscale_img = img.grayscale();
+
+        assert_eq!(compare_images(&to_image(img)?,
+                                  &to_image(grayscale_img)?, Config::default())?, true);
         Ok(())
     }
 
@@ -88,6 +101,6 @@ mod tests {
     fn to_image(decoded_image : DynamicImage) -> anyhow::Result<Image> {
         let width = decoded_image.width();
         let channel_count = decoded_image.color().channel_count();
-        Image::new(&decoded_image.into_bytes(),width, channel_count)
+        Image::from(&decoded_image.into_bytes(),width, channel_count)
     }
 }
