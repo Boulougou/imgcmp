@@ -4,6 +4,7 @@ use nalgebra::DMatrix;
 use ndarray::Array2;
 use anyhow::{anyhow};
 
+/// Calculates DCT basis matrix for all horizontal and vertical frequencies
 pub fn calc_dct_basis(dim : u32) -> Array2<DMatrix<f32>> {
     let matrix_at = |(k, l)| {
         DMatrix::<f32>::from_fn(dim as usize, dim as usize, |m, n| calc_dct_basis_at(dim, k, l, m, n))
@@ -19,6 +20,7 @@ fn calc_dct_basis_at(dim : u32, k : usize, l : usize, m : usize, n : usize) -> f
     return horiz_cos * vert_cos;
 }
 
+/// Calculates the DCT coefficients for the passed image.
 pub fn calc_dct_coefficients(image : &Image, dct_basis : &Array2<DMatrix<f32>>) -> DMatrix<f32> {
     let c = |x| if x == 0 {1.0 / std::f32::consts::SQRT_2} else {1.0};
 
@@ -39,9 +41,9 @@ pub fn calc_dct_coefficients(image : &Image, dct_basis : &Array2<DMatrix<f32>>) 
     coefficients
 }
 
+/// Takes the top left "corner" of the passed DCT coefficients, computes the average and
+/// converts them to single bit, based on whether they are below or above the average.
 pub fn reduce_dct_coefficients(coefficients : DMatrix<f32>, dct_reduced_dimension : u32) -> DMatrix<u8> {
-    // take top left 8x8 from DCT
-    // compute average and convert to 1bit 8x8
     let reduced_coefficients = coefficients.resize(dct_reduced_dimension as usize,
                                                    dct_reduced_dimension as usize,
                                                    0.0);
@@ -49,6 +51,8 @@ pub fn reduce_dct_coefficients(coefficients : DMatrix<f32>, dct_reduced_dimensio
     reduced_coefficients.map(|c| if c < average_coefficient { 0 } else { 1 })
 }
 
+/// Convert passed Matrix to a 64 bitmap. Passed matrix should only contain 1s or 0s.
+/// Matrices with more than 64 elements are not allowed.
 pub fn hash_coefficients(coefficients : &DMatrix<u8>) -> anyhow::Result<u64> {
     if coefficients.len() > 64 {
         return Err(anyhow!("Matrices of more than 64 elements are not allowed"));
@@ -59,6 +63,7 @@ pub fn hash_coefficients(coefficients : &DMatrix<u8>) -> anyhow::Result<u64> {
     Ok(hash)
 }
 
+/// Computes the Hamming distance between the passed bitmaps
 pub fn compare_hashes(hash1 : u64, hash2 : u64) -> u8 {
     let xor = hash1 ^ hash2;
     xor.count_ones() as u8

@@ -8,9 +8,12 @@ use nalgebra::DMatrix;
 use ndarray::Array2;
 
 pub struct Config {
-    pub dct_dimension : u32, // Dimension of DCT matrix, usually 32x32
-    pub dct_reduced_dimension : u32, // Dimension of reduced DCT matrix, e.g. when 8 we will keep only the top left 8x8 corner of DCT
-    pub allowed_distance : u8 // Maximum Hamming distance between two hashes for considering two images as equal
+    /// Dimension of DCT matrix, usually 32x32
+    pub dct_dimension : u32,
+    /// Dimension of reduced DCT matrix, e.g. when 8 we will keep only the top left 8x8 corner of DCT
+    pub dct_reduced_dimension : u32,
+    /// Maximum Hamming distance between two hashes for considering two images as equal
+    pub allowed_distance : u8
 }
 
 pub fn compare_images(left_image : &Image, right_image : &Image, config : Config) -> anyhow::Result<bool> {

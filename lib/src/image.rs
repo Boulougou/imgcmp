@@ -2,6 +2,7 @@ use anyhow::{anyhow};
 
 type Pixel = Vec<u8>;
 
+/// Struct keeping data of a multi-channel image
 #[derive (Debug, PartialEq, Eq, Clone)]
 pub struct Image {
     width : u32,
@@ -11,6 +12,7 @@ pub struct Image {
 }
 
 impl Image {
+    /// Create an image from a byte buffer.
     pub fn from(raw_image : &[u8], width : u32, channels_per_pixel : u8) -> anyhow::Result<Image> {
         if raw_image.is_empty() || width == 0 || channels_per_pixel == 0 {
             return Err(anyhow!("Invalid parameters passed"));
@@ -28,6 +30,7 @@ impl Image {
         Ok(Image{width, height, channels_per_pixel, pixels})
     }
 
+    /// Create an image from an array of RGB tuples.
     pub fn from_rgb(raw_pixels : &[(u8, u8, u8)], width : u32) -> anyhow::Result<Image> {
         let height = raw_pixels.len() as u32 / width;
 
@@ -40,6 +43,7 @@ impl Image {
         Ok(image)
     }
 
+    /// Create an image from an array of RGBA tuples.
     pub fn from_rgba(raw_pixels : &[(u8, u8, u8, u8)], width : u32) -> anyhow::Result<Image> {
         let height = raw_pixels.len() as u32 / width;
 
@@ -74,6 +78,8 @@ impl Image {
         self.channels_per_pixel
     }
 
+    /// Apply a function on each pixel of the image. Pixels are passed as mutable references
+    /// so that mutations can happen in place.
     pub fn apply<F>(&mut self, mut f : F) where F: FnMut(&mut Pixel) {
         for y in 0..self.height {
             for x in 0..self.width {

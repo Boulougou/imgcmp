@@ -1,6 +1,8 @@
 use crate::image::*;
 use anyhow::{anyhow};
 
+/// Scales an image using for each pixel in the new image, the average of its
+/// nearest pixels in the original image
 pub fn scale_image(image : &Image, new_width : u32, new_height : u32) -> anyhow::Result<Image> {
     if new_width == 0 || new_height == 0 {
         return Err(anyhow!("Passed dimensions should not be zero"));
@@ -64,6 +66,8 @@ fn average_pixels(pixels: &[&Vec<u8>]) -> Vec<u32> {
     average_pixel
 }
 
+/// Converts an image to grayscale by taking the average of all channels.
+/// The returned image only has a single channel.
 pub fn into_grayscale(mut image : Image) -> Image {
     image.apply(|pixel| {
         let sum : u32 = pixel.iter().map(|x| *x as u32).sum();
