@@ -1,36 +1,49 @@
 mod image;
-mod utils;
+mod image_processing;
+mod dct;
 
-use crate::image::Image;
+pub use crate::image::Image;
 use anyhow::Context;
+use nalgebra::DMatrix;
+use ndarray::Array2;
 
 pub struct Config {
-    dct_dimension : u32
+    dct_dimension : u32,
+    dct_reduced_dimension : u32
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Config { dct_dimension : 32 }
+        Config { dct_dimension : 32, dct_reduced_dimension : 8 }
     }
 }
 
 pub fn compare_images(left_image : &Image, right_image : &Image, config : Config) -> anyhow::Result<bool> {
-    // Scale both images down to DCT size
-    let left_scaled = utils::scale_image(left_image, config.dct_dimension, config.dct_dimension).
-        context("Failed to scale left image")?;
-    let right_scaled = utils::scale_image(right_image, config.dct_dimension, config.dct_dimension).
-        context("Failed to scale left image")?;
+    let dct_basis_signals = dct::calc_dct_basis(config.dct_dimension);
+    let left_hash = hash_image(&left_image, &dct_basis_signals, config.dct_reduced_dimension).
+        context("Failed to create hash for first image")?;
+    let right_hash = hash_image(&right_image, &dct_basis_signals, config.dct_reduced_dimension).
+        context("Failed to create hash for second image")?;
+
+    Ok(left_hash == right_hash)
+}
+
+fn hash_image(image : &Image, dct_basis : &Array2<DMatrix<f32>>, dct_reduced_dimension : u32) -> anyhow::Result<u64> {
+    // Scale down to DCT size
+    let (dct_dimension, _) = dct_basis.dim();
+    let shrank_image = image_processing::
+        scale_image(image, dct_dimension as u32, dct_dimension as u32).
+        context("Failed to scale image")?;
 
     // convert to grayscale
-    let left_scaled_grayscale = utils::into_grayscale(left_scaled);
-    let right_scaled_grayscale = utils::into_grayscale(right_scaled);
+    let shrank_grayscale_image = image_processing::into_grayscale(shrank_image);
 
-    // compute 32x32 DCT
-    // take top left 8x8 from DCT
-    // compute average and convert to 1bit 8x8
+    // compute NxN DCT coefficients
+    let dct_coefficients = dct::calc_dct_coefficients(&shrank_grayscale_image,
+                                                      &dct_basis, dct_reduced_dimension);
+
     // create hash
-
-    Ok(left_scaled_grayscale == right_scaled_grayscale)
+    Ok(dct::hash_coefficients(&dct_coefficients))
 }
 
 #[cfg(test)]
@@ -80,12 +93,76 @@ mod tests {
     }
 
     #[test]
-    fn image_with_different_aspect_ratio_is_same_with_original() -> anyhow::Result<()> {
+    fn resized_image_is_same_with_original() -> anyhow::Result<()> {
         let img = read_image("../assets/cat.jpg")?;
-        let distorted_img = img.resize(img.width() / 4, img.height() / 2, FilterType::Gaussian);
+        let distorted_img = img.resize_exact(img.width() / 4, img.height() / 2, FilterType::Gaussian);
 
         assert_eq!(compare_images(&to_image(img)?,
                                   &to_image(distorted_img)?, Config::default())?, true);
+        Ok(())
+    }
+
+    #[test]
+    fn resized_and_blurred_image_is_same_with_original() -> anyhow::Result<()> {
+        let img = read_image("../assets/cat.jpg")?;
+        let blurred_img = img.
+            resize_exact(img.width() / 10, img.height() / 2, FilterType::Gaussian).
+            blur(3.0);
+
+        assert_eq!(compare_images(&to_image(img)?,
+                                  &to_image(blurred_img)?, Config::default())?, true);
+        Ok(())
+    }
+
+    #[test]
+    fn blurred_copies_of_original_are_same() -> anyhow::Result<()> {
+        let img = read_image("../assets/cat.jpg")?;
+        let blurred_img1 = img.blur(3.0);
+        let blurred_img2 = img.blur(0.5);
+
+        assert_eq!(compare_images(&to_image(blurred_img1)?,
+                                  &to_image(blurred_img2)?, Config::default())?, true);
+        Ok(())
+    }
+
+    #[test]
+    fn resized_copies_of_original_are_same() -> anyhow::Result<()> {
+        let img = read_image("../assets/cat.jpg")?;
+        let resized_img1 = img.resize_exact(img.width() / 4, img.height() / 2, FilterType::Lanczos3);
+        let resized_img2 = img.resize_exact(img.width() / 2, img.height() / 4, FilterType::CatmullRom);
+
+        assert_eq!(compare_images(&to_image(resized_img1)?,
+                                  &to_image(resized_img2)?, Config::default())?, true);
+        Ok(())
+    }
+
+    #[test]
+    fn shrank_and_blurred_copies_of_original_are_same() -> anyhow::Result<()> {
+        let img = read_image("../assets/cat.jpg")?;
+        let blurred_img1 = img.
+            resize_exact(img.width() / 5, img.height() / 3, FilterType::Gaussian).
+            blur(3.0);
+        let blurred_img2 = img.
+            resize_exact(img.width() / 10, img.height() / 2, FilterType::Gaussian).
+            blur(0.5);
+
+        assert_eq!(compare_images(&to_image(blurred_img1)?,
+                                  &to_image(blurred_img2)?, Config::default())?, true);
+        Ok(())
+    }
+
+    #[test]
+    fn different_shrank_and_blurred_images_are_not_same() -> anyhow::Result<()> {
+        let img1 = read_image("../assets/cat.jpg").
+            and_then(|x| Ok(x.resize_exact(32, 32, FilterType::Gaussian))).
+            and_then(|x| Ok(x.blur(3.0))).
+            and_then(|x| to_image(x))?;
+        let img2 = read_image("../assets/cat2.jpg").
+            and_then(|x| Ok(x.resize_exact(32, 32, FilterType::Gaussian))).
+            and_then(|x| Ok(x.blur(3.0))).
+            and_then(|x| to_image(x))?;
+
+        assert_eq!(compare_images(&img1, &img2, Config::default())?, false);
         Ok(())
     }
 

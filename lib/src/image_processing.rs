@@ -79,7 +79,7 @@ pub fn into_grayscale(mut image : Image) -> Image {
 #[cfg(test)]
 mod tests {
     mod scale_image {
-        use crate::utils::scale_image;
+        use crate::image_processing::scale_image;
         use crate::Image;
 
         #[test]
@@ -252,7 +252,7 @@ mod tests {
     }
 
     mod into_grayscale {
-        use crate::utils::into_grayscale;
+        use crate::image_processing::into_grayscale;
         use crate::Image;
 
         #[test]
