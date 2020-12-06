@@ -11,7 +11,7 @@ fn main() -> anyhow::Result<()> {
     let config = imgcmp_lib::Config {
         dct_dimension : 32,
         dct_reduced_dimension : 8,
-        allowed_distance : 7
+        allowed_distance : 3
     };
 
     let are_same = imgcmp_lib::compare_images(&img1, &img2, config)?;

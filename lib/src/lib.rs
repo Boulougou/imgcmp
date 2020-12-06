@@ -184,6 +184,6 @@ mod tests {
     }
 
     fn test_config() -> Config {
-        Config { dct_dimension : 32, dct_reduced_dimension : 8, allowed_distance : 7 }
+        Config { dct_dimension : 32, dct_reduced_dimension : 8, allowed_distance : 0 }
     }
 }

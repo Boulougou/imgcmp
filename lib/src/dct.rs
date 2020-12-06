@@ -44,9 +44,11 @@ pub fn calc_dct_coefficients(image : &Image, dct_basis : &Array2<DMatrix<f32>>) 
 /// Takes the top left "corner" of the passed DCT coefficients, computes the average and
 /// converts them to single bit, based on whether they are below or above the average.
 pub fn reduce_dct_coefficients(coefficients : DMatrix<f32>, dct_reduced_dimension : u32) -> DMatrix<u8> {
-    let reduced_coefficients = coefficients.resize(dct_reduced_dimension as usize,
+    let mut reduced_coefficients = coefficients.resize(dct_reduced_dimension as usize,
                                                    dct_reduced_dimension as usize,
                                                    0.0);
+    // Exclude first term which is significantly different than other terms
+    reduced_coefficients[(0, 0)] = 0.0;
     let average_coefficient = reduced_coefficients.mean();
     reduced_coefficients.map(|c| if c < average_coefficient { 0 } else { 1 })
 }
