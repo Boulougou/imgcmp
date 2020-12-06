@@ -2,6 +2,7 @@ use crate::image::*;
 use std::f32::consts::PI;
 use nalgebra::DMatrix;
 use ndarray::Array2;
+use anyhow::{anyhow};
 
 pub fn calc_dct_basis(dim : u32) -> Array2<DMatrix<f32>> {
     let matrix_at = |(m, n)| {
@@ -34,8 +35,61 @@ pub fn calc_dct_coefficients(image : &Image, dct_basis : &Array2<DMatrix<f32>>, 
     reduced_coefficients.map(|c| if c < average_coefficient { 0 } else { 1 })
 }
 
-pub fn hash_coefficients(coefficients : &DMatrix<u8>) -> u64 {
+pub fn hash_coefficients(coefficients : &DMatrix<u8>) -> anyhow::Result<u64> {
+    if coefficients.len() > 64 {
+        return Err(anyhow!("Matrices of more than 64 elements are not allowed"));
+    }
+
     let (_, hash) = coefficients.fold((0 as u64, 0 as u64),
         |(index, hash), c| (index + 1, hash | ((c as u64) << index)));
-    hash
+    Ok(hash)
+}
+
+pub fn compare_hashes(hash1 : u64, hash2 : u64) -> u8 {
+    let xor = hash1 ^ hash2;
+    xor.count_ones() as u8
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn calculate_hash_from_matrix() -> anyhow::Result<()> {
+        let coefficients = DMatrix::from_row_slice(3, 3, &[
+            0, 1, 0,
+            1, 1, 1,
+            1, 0, 0]);
+
+        let hash = hash_coefficients(&coefficients)?;
+
+        assert_eq!(hash, 0b010011110);
+        Ok(())
+    }
+
+    #[test]
+    fn do_not_calculate_hash_when_matrix_dimension_is_greater_than_allowed() -> anyhow::Result<()> {
+        let coefficients = DMatrix::zeros(9, 9);
+
+        let result = hash_coefficients(&coefficients);
+
+        assert!(result.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn return_zero_when_comparing_equal_hashes() -> anyhow::Result<()> {
+        let result = compare_hashes(0b1011100100, 0b1011100100);
+
+        assert_eq!(result, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn return_non_zero_when_comparing_different_hashes() -> anyhow::Result<()> {
+        let result = compare_hashes(0b1101101100, 0b1011100100);
+
+        assert_eq!(result, 3);
+        Ok(())
+    }
 }

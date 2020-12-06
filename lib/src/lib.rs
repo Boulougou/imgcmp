@@ -9,12 +9,13 @@ use ndarray::Array2;
 
 pub struct Config {
     dct_dimension : u32,
-    dct_reduced_dimension : u32
+    dct_reduced_dimension : u32,
+    allowed_distance : u8
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Config { dct_dimension : 32, dct_reduced_dimension : 8 }
+        Config { dct_dimension : 32, dct_reduced_dimension : 8, allowed_distance : 5 }
     }
 }
 
@@ -25,7 +26,8 @@ pub fn compare_images(left_image : &Image, right_image : &Image, config : Config
     let right_hash = hash_image(&right_image, &dct_basis_signals, config.dct_reduced_dimension).
         context("Failed to create hash for second image")?;
 
-    Ok(left_hash == right_hash)
+    let distance = dct::compare_hashes(left_hash, right_hash);
+    Ok(distance <= config.allowed_distance)
 }
 
 fn hash_image(image : &Image, dct_basis : &Array2<DMatrix<f32>>, dct_reduced_dimension : u32) -> anyhow::Result<u64> {
@@ -43,7 +45,8 @@ fn hash_image(image : &Image, dct_basis : &Array2<DMatrix<f32>>, dct_reduced_dim
                                                       &dct_basis, dct_reduced_dimension);
 
     // create hash
-    Ok(dct::hash_coefficients(&dct_coefficients))
+    let hash = dct::hash_coefficients(&dct_coefficients).context("Failed to calculate hash")?;
+    Ok(hash)
 }
 
 #[cfg(test)]
