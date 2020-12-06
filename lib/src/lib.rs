@@ -8,15 +8,9 @@ use nalgebra::DMatrix;
 use ndarray::Array2;
 
 pub struct Config {
-    dct_dimension : u32,
-    dct_reduced_dimension : u32,
-    allowed_distance : u8
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Config { dct_dimension : 32, dct_reduced_dimension : 8, allowed_distance : 5 }
-    }
+    pub dct_dimension : u32, // Dimension of DCT matrix, usually 32x32
+    pub dct_reduced_dimension : u32, // Dimension of reduced DCT matrix, e.g. when 8 we will keep only the top left 8x8 corner of DCT
+    pub allowed_distance : u8 // Maximum Hamming distance between two hashes for considering two images as equal
 }
 
 pub fn compare_images(left_image : &Image, right_image : &Image, config : Config) -> anyhow::Result<bool> {
@@ -26,6 +20,8 @@ pub fn compare_images(left_image : &Image, right_image : &Image, config : Config
     let right_hash = hash_image(&right_image, &dct_basis_signals, config.dct_reduced_dimension).
         context("Failed to create hash for second image")?;
 
+    // println!("{:#b}", left_hash);
+    // println!("{:#b}", right_hash);
     let distance = dct::compare_hashes(left_hash, right_hash);
     Ok(distance <= config.allowed_distance)
 }
@@ -41,11 +37,11 @@ fn hash_image(image : &Image, dct_basis : &Array2<DMatrix<f32>>, dct_reduced_dim
     let shrank_grayscale_image = image_processing::into_grayscale(shrank_image);
 
     // compute NxN DCT coefficients
-    let dct_coefficients = dct::calc_dct_coefficients(&shrank_grayscale_image,
-                                                      &dct_basis, dct_reduced_dimension);
+    let dct_coefficients = dct::calc_dct_coefficients(&shrank_grayscale_image, &dct_basis);
+    let dct_reduced_coefficients = dct::reduce_dct_coefficients(dct_coefficients, dct_reduced_dimension);
 
     // create hash
-    let hash = dct::hash_coefficients(&dct_coefficients).context("Failed to calculate hash")?;
+    let hash = dct::hash_coefficients(&dct_reduced_coefficients).context("Failed to calculate hash")?;
     Ok(hash)
 }
 
@@ -62,7 +58,7 @@ mod tests {
         let img1 = read_image("../assets/cat.jpg").and_then(|x| to_image(x))?;
         let img2 = read_image("../assets/cat.jpg").and_then(|x| to_image(x))?;
 
-        assert_eq!(compare_images(&img1, &img2, Config::default())?, true);
+        assert_eq!(compare_images(&img1, &img2, test_config())?, true);
         Ok(())
     }
 
@@ -71,7 +67,7 @@ mod tests {
         let img1 = read_image("../assets/cat.jpg").and_then(|x| to_image(x))?;
         let img2 = read_image("../assets/cat2.jpg").and_then(|x| to_image(x))?;
 
-        assert_eq!(compare_images(&img1, &img2, Config::default())?, false);
+        assert_eq!(compare_images(&img1, &img2, test_config())?, false);
         Ok(())
     }
 
@@ -81,7 +77,7 @@ mod tests {
         let grayscale_img = img.grayscale();
 
         assert_eq!(compare_images(&to_image(img)?,
-                                  &to_image(grayscale_img)?, Config::default())?, true);
+                                  &to_image(grayscale_img)?, test_config())?, true);
         Ok(())
     }
 
@@ -91,7 +87,7 @@ mod tests {
         let blurred_img = img.blur(3.0);
 
         assert_eq!(compare_images(&to_image(img)?,
-                                  &to_image(blurred_img)?, Config::default())?, true);
+                                  &to_image(blurred_img)?, test_config())?, true);
         Ok(())
     }
 
@@ -101,7 +97,7 @@ mod tests {
         let distorted_img = img.resize_exact(img.width() / 4, img.height() / 2, FilterType::Gaussian);
 
         assert_eq!(compare_images(&to_image(img)?,
-                                  &to_image(distorted_img)?, Config::default())?, true);
+                                  &to_image(distorted_img)?, test_config())?, true);
         Ok(())
     }
 
@@ -113,7 +109,7 @@ mod tests {
             blur(3.0);
 
         assert_eq!(compare_images(&to_image(img)?,
-                                  &to_image(blurred_img)?, Config::default())?, true);
+                                  &to_image(blurred_img)?, test_config())?, true);
         Ok(())
     }
 
@@ -124,7 +120,7 @@ mod tests {
         let blurred_img2 = img.blur(0.5);
 
         assert_eq!(compare_images(&to_image(blurred_img1)?,
-                                  &to_image(blurred_img2)?, Config::default())?, true);
+                                  &to_image(blurred_img2)?, test_config())?, true);
         Ok(())
     }
 
@@ -135,7 +131,7 @@ mod tests {
         let resized_img2 = img.resize_exact(img.width() / 2, img.height() / 4, FilterType::CatmullRom);
 
         assert_eq!(compare_images(&to_image(resized_img1)?,
-                                  &to_image(resized_img2)?, Config::default())?, true);
+                                  &to_image(resized_img2)?, test_config())?, true);
         Ok(())
     }
 
@@ -150,7 +146,7 @@ mod tests {
             blur(0.5);
 
         assert_eq!(compare_images(&to_image(blurred_img1)?,
-                                  &to_image(blurred_img2)?, Config::default())?, true);
+                                  &to_image(blurred_img2)?, test_config())?, true);
         Ok(())
     }
 
@@ -158,14 +154,14 @@ mod tests {
     fn different_shrank_and_blurred_images_are_not_same() -> anyhow::Result<()> {
         let img1 = read_image("../assets/cat.jpg").
             and_then(|x| Ok(x.resize_exact(32, 32, FilterType::Gaussian))).
-            and_then(|x| Ok(x.blur(3.0))).
+            and_then(|x| Ok(x.blur(0.5))).
             and_then(|x| to_image(x))?;
         let img2 = read_image("../assets/cat2.jpg").
             and_then(|x| Ok(x.resize_exact(32, 32, FilterType::Gaussian))).
-            and_then(|x| Ok(x.blur(3.0))).
+            and_then(|x| Ok(x.blur(0.5))).
             and_then(|x| to_image(x))?;
 
-        assert_eq!(compare_images(&img1, &img2, Config::default())?, false);
+        assert_eq!(compare_images(&img1, &img2, test_config())?, false);
         Ok(())
     }
 
@@ -182,5 +178,9 @@ mod tests {
         let width = decoded_image.width();
         let channel_count = decoded_image.color().channel_count();
         Image::from(&decoded_image.into_bytes(),width, channel_count)
+    }
+
+    fn test_config() -> Config {
+        Config { dct_dimension : 32, dct_reduced_dimension : 8, allowed_distance : 7 }
     }
 }

@@ -8,7 +8,13 @@ fn main() -> anyhow::Result<()> {
     let img1 = read_image(&args[1])?;
     let img2 = read_image(&args[2])?;
 
-    let are_same = imgcmp_lib::compare_images(&img1, &img2, imgcmp_lib::Config::default())?;
+    let config = imgcmp_lib::Config {
+        dct_dimension : 32,
+        dct_reduced_dimension : 8,
+        allowed_distance : 7
+    };
+
+    let are_same = imgcmp_lib::compare_images(&img1, &img2, config)?;
     if are_same {
         println!("Pictures are the same");
     }
